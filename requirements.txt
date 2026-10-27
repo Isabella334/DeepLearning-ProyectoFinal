@@ -1,0 +1,10 @@
+numpy
+mujoco
+matplotlib
+pytest
+pyyaml
+# Integracion (vision y camara): opencv-contrib-python, ultralytics
+# P2 (reconocedor y preferencias) y P3 (anticipacion): torch, torchvision
+# P3 (voz): openai-whisper, sounddevice
+# P4 (gestos, opcional): mediapipe
+# P4 (XAI): shap

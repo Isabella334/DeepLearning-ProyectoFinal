@@ -1,0 +1,41 @@
+# Configuracion compartida. Si cambia algo aqui, avisar al grupo.
+
+# Objetos que usaremos en el EXPERIMENTO y en la simulacion.
+# OJO: el robot NO conoce esta lista. Todo objeto empieza como "desconocido" y la
+# persona le ensena su nombre. Esta lista solo sirve para crear el mundo simulado
+# y para medir si el robot aprendio bien.
+objetos_del_experimento:
+  - lapicero rojo
+  - lapicero azul
+  - borrador
+  - bolita de papel
+  - virutas de lapiz
+  - cuaderno verde       # solo senal: no se empuja
+
+# Reconocimiento con pocos ejemplos
+reconocimiento:
+  umbral_similitud: 0.85   # debajo de esto, el objeto es "desconocido"
+
+# Voz
+voz:
+  nombre_del_robot: "robot"   # palabra clave para que empiece a escuchar (cambiar al elegir nombre)
+
+# Medidas reales de la cartulina, en metros (MEDIRLA y actualizar)
+cartulina:
+  ancho: 0.65
+  alto: 0.50
+
+# Marcadores ArUco (diccionario 4x4_50), lado en metros
+aruco:
+  diccionario: DICT_4X4_50
+  esquinas: {0: inf_izq, 1: inf_der, 2: sup_der, 3: sup_izq}
+  carrito: 10
+  lado: 0.06
+
+# Zonas sobre la cartulina, en metros desde el centro (x, y, medio_lado)
+zonas:
+  apartar: [0.25, 0.17, 0.07]
+  persona: [-0.25, 0.17, 0.07]
+
+# Version activa: A (todo digital), B (gemelo digital), C (fisico)
+version: B
