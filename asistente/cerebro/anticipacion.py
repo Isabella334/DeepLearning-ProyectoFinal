@@ -7,6 +7,8 @@ Anticipacion (P3): predice el siguiente pedido a partir de la secuencia de event
 Cada momento del flujo de eventos es una muestra: la entrada son los ultimos eventos y la
 etiqueta es el pedido que vino despues, o NINGUNO si despues no se pidio nada. Asi la
 probabilidad que devuelve predecir() es directamente la de que ese pedido sea el siguiente.
+Los eventos casi simultaneos forman un momento y entre momentos se inserta el token SEPARADOR,
+porque dentro de un mismo ciclo el orden de los eventos es arbitrario.
 """
 from __future__ import annotations
 
@@ -20,10 +22,23 @@ from .contratos import ModeloAnticipacion
 
 NINGUNO = "<ninguno>"
 VACIO = "<vacio>"
+SEPARADOR = "<momento>"
 
 
 def token(evento: Evento) -> str:
     return f"{evento.tipo}:{evento.detalle}"
+
+
+def _canonico(tokens: list[str]) -> list[str]:
+    """Ordena los eventos dentro de cada momento, porque ahi el orden no significa nada."""
+    salida, momento = [], []
+    for tok in tokens + [SEPARADOR]:
+        if tok == SEPARADOR:
+            salida += sorted(momento) + [SEPARADOR]
+            momento = []
+        else:
+            momento.append(tok)
+    return salida[:-1]
 
 
 class Vocabulario:
@@ -65,7 +80,7 @@ class _AnticipacionBase(ModeloAnticipacion):
         self.muestras: list[tuple[list[str], str]] = []
 
     def predecir(self, eventos):
-        tokens = [token(e) for e in eventos][-self.ventana:]
+        tokens = _canonico(self._tokens(eventos))[-self.ventana:]
         if not tokens or len(self.salidas) <= 1:
             return None, 0.0
         probs = self._probabilidades(tokens)
@@ -87,9 +102,19 @@ class _AnticipacionBase(ModeloAnticipacion):
                 self._agregar(token(ultimo), ultimo.t)
             else:
                 self.pendientes[pedido_real] += 1
-                self._agregar(f"pedido:{pedido_real}", self.flujo[-1][1] if self.flujo else 0.0)
+                t = self.flujo[-1][1] + 2 * self.simultaneo_s if self.flujo else 0.0
+                self._agregar(f"pedido:{pedido_real}", t)
         self.muestras = (self.muestras + nuevas)[-self.max_muestras:]
         self._aprender(nuevas)
+
+    def _tokens(self, eventos: list[Evento]) -> list[str]:
+        tokens, anterior = [], None
+        for e in sorted(eventos, key=lambda e: e.t):
+            if anterior is not None and e.t - anterior > self.simultaneo_s:
+                tokens.append(SEPARADOR)
+            tokens.append(token(e))
+            anterior = e.t
+        return tokens
 
     def _clave(self, e: Evento):
         return (e.t, e.tipo, e.detalle)
@@ -109,12 +134,16 @@ class _AnticipacionBase(ModeloAnticipacion):
         return nuevas
 
     def _agregar(self, tok: str, t: float):
-        self.entradas.indice(tok)
-        self.flujo = (self.flujo + [(tok, t)])[-self.ventana:]
+        nuevos = [(tok, t)]
+        if self.flujo and t - self.flujo[-1][1] > self.simultaneo_s:
+            nuevos.insert(0, (SEPARADOR, t))
+        for n, _ in nuevos:
+            self.entradas.indice(n)
+        self.flujo = (self.flujo + nuevos)[-2 * self.ventana:]
 
     def _muestra(self, etiqueta: str) -> tuple[list[str], str]:
         self.salidas.indice(etiqueta)
-        return [tok for tok, _ in self.flujo], etiqueta
+        return _canonico([tok for tok, _ in self.flujo])[-self.ventana:], etiqueta
 
     def _estado(self) -> dict:
         return dict(ventana=self.ventana, simultaneo_s=self.simultaneo_s,
@@ -143,8 +172,14 @@ class _AnticipacionBase(ModeloAnticipacion):
         raise NotImplementedError
 
 
+def _ultimo_momento(tokens: list[str]) -> set[str]:
+    corte = len(tokens) - tokens[::-1].index(SEPARADOR) if SEPARADOR in tokens else 0
+    return set(tokens[corte:])
+
+
 class AnticipacionFrecuencias(_AnticipacionBase):
-    """Version 1: cuenta que pedido (o NINGUNO) vino despues de cada evento."""
+    """Version 1: cuenta que pedido (o NINGUNO) vino despues de cada evento del ultimo momento
+    y predice con el evento que mas fuerte apunta a un pedido."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -152,13 +187,20 @@ class AnticipacionFrecuencias(_AnticipacionBase):
 
     def _aprender(self, nuevas):
         for ventana, etiqueta in nuevas:
-            if ventana:
-                self.conteos[ventana[-1]][etiqueta] += 1
+            for tok in _ultimo_momento(ventana):
+                self.conteos[tok][etiqueta] += 1
 
     def _probabilidades(self, tokens):
-        conteo = self.conteos.get(tokens[-1], Counter())
-        total = sum(conteo.values())
-        return [conteo[s] / total if total else 0.0 for s in self.salidas.tokens]
+        mejor = [0.0] * len(self.salidas)
+        for tok in _ultimo_momento(tokens):
+            conteo = self.conteos.get(tok)
+            if not conteo:
+                continue
+            total = sum(conteo.values())
+            probs = [conteo[s] / total for s in self.salidas.tokens]
+            if max(probs[1:], default=0.0) > max(mejor[1:], default=0.0):
+                mejor = probs
+        return mejor
 
     def _estado(self):
         return super()._estado() | {"conteos": {k: dict(v) for k, v in self.conteos.items()}}
@@ -200,7 +242,7 @@ class AnticipacionSecuencias(_AnticipacionBase):
     """Version 2: LSTM pequeno que recibe los ultimos eventos y predice el siguiente pedido.
     Como hay pocos datos, en cada actualizacion reentrena unas epocas con todas las muestras."""
 
-    def __init__(self, ventana: int = 8, epocas: int = 60, lr: float = 0.02, semilla: int = 0, **kwargs):
+    def __init__(self, ventana: int = 12, epocas: int = 60, lr: float = 0.02, semilla: int = 0, **kwargs):
         super().__init__(ventana=ventana, **kwargs)
         self.epocas, self.lr, self.semilla = epocas, lr, semilla
         with torch.random.fork_rng():
