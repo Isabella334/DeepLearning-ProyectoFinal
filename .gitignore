@@ -3,3 +3,4 @@ __pycache__/
 *.db
 MUJOCO_LOG.TXT
 modelos/
+.venv/
