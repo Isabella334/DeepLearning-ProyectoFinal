@@ -107,6 +107,17 @@ def test_pedido_sin_evento_no_se_cuenta_dos_veces(Modelo):
 
 
 @pytest.mark.parametrize("Modelo", MODELOS)
+def test_el_mismo_pedido_no_se_aprende_dos_veces(Modelo):
+    a, f = Modelo(), Flujo()
+    f.agregar("aparecio", "objeto_senal")
+    f.agregar("pedido", PEDIDO)
+    a.actualizar(f.eventos, PEDIDO)
+    n = len(a.muestras)
+    a.actualizar(f.eventos, PEDIDO)
+    assert len(a.muestras) == n
+
+
+@pytest.mark.parametrize("Modelo", MODELOS)
 def test_rechazos_bajan_la_confianza(Modelo):
     a, f = Modelo(), Flujo()
     for _ in range(6):

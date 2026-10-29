@@ -92,8 +92,9 @@ class _AnticipacionBase(ModeloAnticipacion):
     def actualizar(self, eventos, pedido_real):
         eventos = sorted(eventos, key=lambda e: e.t)
         ultimo = eventos[-1] if eventos else None
-        realizado = (ultimo is not None and ultimo.tipo == "pedido" and ultimo.detalle == pedido_real
-                     and self._clave(ultimo) not in self.vistos)
+        realizado = ultimo is not None and ultimo.tipo == "pedido" and ultimo.detalle == pedido_real
+        if realizado and self._clave(ultimo) in self.vistos:
+            return
         nuevas = self._incorporar(eventos[:-1] if realizado else eventos)
         nuevas.append(self._muestra(pedido_real))
         if pedido_real != NINGUNO:
