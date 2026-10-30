@@ -5,15 +5,18 @@ Ejemplos:
     python main.py --modo falso --pasos 5                    # todo falso, corre en cualquier compu
     python main.py --modo falso --voz teclado --feedback teclado   # vos le hablas (escribiendo)
     python main.py --modo sim --pasos 3                      # cuerpo y percepcion en MuJoCo
+    python main.py --modo falso --voz whisper --feedback teclado   # le hablas por el microfono
 
 Para usar un modulo real, se cambia SOLO la funcion construir(). Nada mas.
 """
 import argparse
 
-from asistente.mocks import (CerebroAlAzar, CuerpoFalso, ExplicadorSimple, FeedbackAlAzar,
-                             FeedbackTeclado, MemoriaEnRAM, PercepcionFalsa, ReconocedorFalso,
-                             VozTeclado)
-from asistente.tipos import DESCONOCIDO, Accion, Contexto, Evento, Feedback
+from asistente.cerebro.cerebro import CerebroAprendiz
+from asistente.mocks import (CuerpoFalso, ExplicadorSimple, FeedbackAlAzar, FeedbackTeclado,
+                             MemoriaEnRAM, PercepcionFalsa, ReconocedorFalso, VozTeclado)
+from asistente.tipos import DESCONOCIDO, Accion, Contexto, Evento, Feedback, Resultado
+
+PREGUNTAS = {Accion.TRAER: "Te paso '{}'?", Accion.APARTAR: "Aparto '{}'?", Accion.ACERCARSE: "Me acerco?"}
 
 
 def construir(args):
@@ -27,11 +30,16 @@ def construir(args):
     else:
         percepcion, cuerpo = PercepcionFalsa(reconocedor, args.persona), CuerpoFalso()
 
-    cerebro = CerebroAlAzar()                 # P3 lo cambia por CerebroAprendiz
+    cerebro = CerebroAprendiz()               # P2 le pasa preferencias=PreferenciasRed()
     memoria = MemoriaEnRAM()                  # P4 lo cambia por MemoriaSQLite
     explicador = ExplicadorSimple()           # P4 lo cambia por ExplicadorXAI
     feedback = FeedbackTeclado() if args.feedback == "teclado" else FeedbackAlAzar()
-    voz = VozTeclado() if args.voz == "teclado" else None     # P3 lo cambia por VozWhisper
+    voz = None
+    if args.voz == "teclado":
+        voz = VozTeclado()
+    elif args.voz == "whisper":
+        from asistente.voz import VozWhisper
+        voz = VozWhisper()
     return percepcion, cuerpo, cerebro, memoria, explicador, feedback, voz
 
 
@@ -39,6 +47,8 @@ def atender_voz(voz, percepcion, memoria, persona_id, escena):
     """Escucha una orden. Devuelve un pedido (para el cerebro) o un Feedback, o None."""
     if voz is None:
         return None, None
+    if hasattr(voz, "vocabulario"):       # los nombres que ya conoce ayudan a Whisper a entenderlos
+        voz.vocabulario = sorted({o.nombre for o in escena.objetos if o.nombre != DESCONOCIDO})
     texto = voz.escuchar()
     orden = voz.interpretar(texto) if texto else None
     if orden is None:
@@ -54,7 +64,8 @@ def atender_voz(voz, percepcion, memoria, persona_id, escena):
         return None, None
     if orden.tipo == "feedback":
         return None, Feedback(persona_id, orden.aprobado, fuente="voz")
-    memoria.registrar_evento(Evento("pedido", f"{orden.accion.value}:{orden.nombre}", persona_id))
+    if orden.tipo == "pedido" and orden.nombre:      # las reglas no son pedidos para la anticipacion
+        memoria.registrar_evento(Evento("pedido", f"{orden.accion.value}:{orden.nombre}", persona_id))
     return orden, None
 
 
@@ -80,10 +91,23 @@ def un_ciclo(percepcion, cuerpo, cerebro, memoria, explicador, entrada, voz, per
           f"(confianza {decision.confianza:.0%})")
     print(f"   Explicacion: {explicacion.texto} {explicacion.evidencia}")
 
-    resultado = cuerpo.ejecutar(decision.accion, objeto, escena)
+    fb = None
+    confirmar = decision.preguntar_antes and decision.accion != Accion.IGNORAR
+    if confirmar:
+        # Si duda, pregunta antes de actuar; la respuesta es el feedback de esta decision
+        print(f"   Robot: {PREGUNTAS[decision.accion].format(objeto.nombre if objeto else '')}")
+        fb = entrada.esperar(persona_id)
+    elif decision.preguntar_antes and contexto.pedido is not None:
+        print(f"   Robot: No encuentro '{contexto.pedido.nombre}' en la mesa.")
+
+    if confirmar and (fb is None or not fb.aprobado):
+        resultado = Resultado(exito=False, duracion_s=0.0, mensaje="no lo hice: no me lo confirmaste")
+    else:
+        resultado = cuerpo.ejecutar(decision.accion, objeto, escena)
     print(f"   Resultado: {'ok' if resultado.exito else 'fallo'} - {resultado.mensaje}")
 
-    fb = entrada.esperar(persona_id) if decision.accion != Accion.IGNORAR else None
+    if not confirmar and decision.accion != Accion.IGNORAR:
+        fb = entrada.esperar(persona_id)
     if fb is not None:
         cerebro.aprender(contexto, decision, fb)
         memoria.registrar_evento(Evento("feedback", "si" if fb.aprobado else "no", persona_id))
@@ -95,7 +119,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--modo", choices=["falso", "sim", "real"], default="falso")
     ap.add_argument("--feedback", choices=["azar", "teclado"], default="azar")
-    ap.add_argument("--voz", choices=["no", "teclado"], default="no")
+    ap.add_argument("--voz", choices=["no", "teclado", "whisper"], default="no")
     ap.add_argument("--persona", default="persona_A")
     ap.add_argument("--pasos", type=int, default=5)
     ap.add_argument("--ventana", action="store_true")
