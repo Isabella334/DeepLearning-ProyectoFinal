@@ -10,4 +10,6 @@ torch
 openai-whisper
 sounddevice
 # P4 (gestos, opcional): mediapipe
-# P4 (XAI): shap
+# P4 (XAI y pantalla):
+shap
+streamlit

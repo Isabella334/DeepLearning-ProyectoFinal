@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import numpy as np
+import shap
+
 from ..cerebro.cerebro import normalizar
 from ..interfaces import Cerebro, Explicador, Memoria
 from ..tipos import DESCONOCIDO, Accion, Contexto, Decision, Explicacion
@@ -26,7 +29,25 @@ class ExplicadorXAI(Explicador):
             evidencia = self._evidencia(contexto, decision, nombre, memoria)
         except Exception:
             evidencia = ""
-        return Explicacion(texto=texto, evidencia=evidencia, contribuciones={})
+        try:
+            contribuciones = self._contribuciones(contexto, decision, cerebro)
+        except Exception:
+            contribuciones = dict(decision.puntajes)
+        return Explicacion(texto=texto, evidencia=evidencia, contribuciones=contribuciones)
+
+    def _contribuciones(self, contexto: Contexto, decision: Decision, cerebro: Cerebro | None) -> dict:
+        """SHAP sobre la red de preferencias para la accion elegida; sin red, los puntajes de la decision."""
+        modelo = cerebro.preferencias_de(contexto.persona_id) if hasattr(cerebro, "preferencias_de") else None
+        if not (hasattr(modelo, "predecir_vectores") and hasattr(modelo, "fondo")):
+            return dict(decision.puntajes)
+        x = np.asarray([modelo.vector(contexto, decision.objeto_id)], dtype=float)
+        nombres = modelo.nombres_caracteristicas()      # despues de vector(): puede sumar nombres nuevos
+        j = list(Accion).index(decision.accion)
+        # En log-odds: la red satura cerca de 0 y 1 y en probabilidad todo se ve como ~0
+        explicador = shap.KernelExplainer(lambda X: np.clip(modelo.predecir_vectores(X)[:, j], 1e-6, 1 - 1e-6),
+                                          np.asarray(modelo.fondo(self.n_fondo), dtype=float), link="logit")
+        valores = np.asarray(explicador.shap_values(x, nsamples=self.nsamples, silent=True)).reshape(-1)
+        return {n: float(v) for n, v in zip(nombres, valores) if abs(v) > 1e-6}
 
     def _texto(self, contexto: Contexto, decision: Decision, nombre: str | None) -> str:
         motivo, pedido = decision.motivo, contexto.pedido

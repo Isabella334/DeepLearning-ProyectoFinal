@@ -1,7 +1,9 @@
 import time
 
+import numpy as np
 import pytest
 
+from asistente.cerebro.contratos import ModeloPreferencias, PreferenciasFalsas
 from asistente.interfaces import Explicador
 from asistente.memoria import MemoriaSQLite
 from asistente.tipos import (DESCONOCIDO, Accion, Contexto, Decision, Escena, Evento, Explicacion,
@@ -9,6 +11,7 @@ from asistente.tipos import (DESCONOCIDO, Accion, Contexto, Decision, Escena, Ev
 from asistente.xai.explicador import ExplicadorXAI
 
 P = "persona_A"
+ACCIONES = list(Accion)
 
 
 def _contexto(nombre="objeto x", eventos=None, pedido=None):
@@ -91,3 +94,91 @@ def test_nunca_falla(motivo):
     ctx = _contexto(eventos=[Evento("aparecio", "senal y", P)])
     e = ExplicadorXAI().explicar(ctx, _decision(motivo), None, _MemoriaRota())
     assert isinstance(e, Explicacion) and e.texto
+
+
+
+class _PreferenciasLineales(ModeloPreferencias):
+    """Solo 'es_objeto_x' importa de verdad para TRAER; 'hay_senal' casi nada."""
+
+    def vector(self, contexto, objeto_id):
+        obj = next((o for o in contexto.escena.objetos if o.id == objeto_id), None)
+        return [float(obj is not None and obj.nombre == "objeto x"), 1.0]
+
+    def nombres_caracteristicas(self):
+        return ["es_objeto_x", "hay_senal"]
+
+    def predecir_vectores(self, X):
+        X = np.asarray(X, dtype=float)
+        salida = np.full((len(X), len(ACCIONES)), 0.1)
+        salida[:, ACCIONES.index(Accion.TRAER)] = 0.8 * X[:, 0] + 0.1 * X[:, 1]
+        return salida
+
+    def fondo(self, n=50):
+        return np.zeros((1, 2))
+
+    def puntajes(self, contexto, objeto_id):
+        return dict(zip(ACCIONES, self.predecir_vectores([self.vector(contexto, objeto_id)])[0]))
+
+    def actualizar(self, contexto, objeto_id, accion, aprobado):
+        pass
+
+    def guardar(self, ruta):
+        pass
+
+    def cargar(self, ruta):
+        pass
+
+    def clonar(self):
+        return self
+
+
+class _Cerebro:
+    def __init__(self, modelo):
+        self.modelo = modelo
+
+    def preferencias_de(self, persona_id):
+        return self.modelo
+
+
+class _PreferenciasRotas(_PreferenciasLineales):
+    def vector(self, contexto, objeto_id):
+        raise RuntimeError("red rota")
+
+
+def test_shap_con_modelo():
+    e = ExplicadorXAI().explicar(_contexto(), _decision("preferencia"), _Cerebro(_PreferenciasLineales()),
+                                 MemoriaSQLite())
+    c = e.contribuciones
+    assert c["es_objeto_x"] > 0
+    assert abs(c["es_objeto_x"]) > abs(c["hay_senal"])
+
+
+def test_shap_sin_predecir_vectores():
+    d = _decision("preferencia", puntajes={"traer": 0.3, "apartar": 0.4})
+    e = ExplicadorXAI().explicar(_contexto(), d, _Cerebro(PreferenciasFalsas()), MemoriaSQLite())
+    assert e.contribuciones == d.puntajes
+
+
+@pytest.mark.parametrize("cerebro", [None, object(), _Cerebro(_PreferenciasRotas())])
+def test_shap_nunca_falla(cerebro):
+    d = _decision("preferencia", puntajes={"traer": 0.3})
+    e = ExplicadorXAI().explicar(_contexto(), d, cerebro, MemoriaSQLite())
+    assert e.texto and e.contribuciones == d.puntajes
+
+
+def test_shap_con_preferencias_red():
+    preferencias = pytest.importorskip("asistente.cerebro.preferencias")
+    from asistente import mocks
+    from asistente.cerebro.cerebro import CerebroAprendiz
+
+    cerebro = CerebroAprendiz(preferencias=preferencias.PreferenciasRed(pasos_por_actualizacion=5))
+    percepcion = mocks.PercepcionFalsa(semilla=3)
+    for _ in range(3):
+        ctx = Contexto(percepcion.observar(), P, [])
+        d = cerebro.decidir(ctx)
+        cerebro.aprender(ctx, d, Feedback(P, True))
+    ctx = Contexto(percepcion.observar(), P, [])
+    d = cerebro.decidir(ctx)
+    e = ExplicadorXAI().explicar(ctx, d, cerebro, MemoriaSQLite())
+    nombres = set(cerebro.preferencias_de(P).nombres_caracteristicas())
+    assert e.contribuciones and set(e.contribuciones) <= nombres
