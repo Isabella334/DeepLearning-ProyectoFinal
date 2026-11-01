@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Callable
 
@@ -53,7 +54,10 @@ class Sesion:
         mundo = MundoSim(semilla=semilla)
 
         def poner(tipo):
-            mundo.colocar(mundo.nuevo_id(), tipo, *mundo.lugar_libre(tipo))
+            if not any(t == tipo and b not in mundo.ocupante for b, t in mundo.casillas):
+                raise ValueError(f"no quedan copias libres de '{tipo}'")
+            x, y = mundo.lugar_libre(tipo)
+            mundo.colocar(mundo.nuevo_id(), tipo, x, y)
 
         sesion = cls(persona_id, ruta_db,
                      percepcion=PercepcionSim(mundo, ReconocedorPocosEjemplos(modo="cabeza"), persona_id),
@@ -95,7 +99,21 @@ class Sesion:
         return (self.decision is not None and self.decision.preguntar_antes
                 and self.decision.accion != Accion.IGNORAR)
 
+    def tipos_para_poner(self) -> list[str]:
+        if self.mundo is None:
+            return []
+        libres = {t for b, t in self.mundo.casillas if b not in self.mundo.ocupante}
+        return [t for t in self.mundo.tipos if t in libres]
+
+    def _retirar_caidos(self) -> None:
+        # Lo que se cae de la cartulina se levanta del piso: si no, ocupa su copia y no se ve
+        for oid in list(self.mundo.presentes()):
+            if not self.mundo.en_mesa(self.mundo.pos(oid), margen=0.02):
+                self.mundo.quitar(oid)
+
     def observar(self) -> Escena:
+        if self.mundo is not None:
+            self._retirar_caidos()
         self.escena = self.percepcion.observar()
         actuales = {o.nombre for o in self.escena.objetos if o.nombre != DESCONOCIDO}
         for nombre in actuales - self._anteriores:
@@ -163,6 +181,11 @@ class Sesion:
             self.guardar()
         self._limpiar()
         return id_
+
+    def reiniciar(self) -> None:
+        self.memoria.olvidar(self.persona_id)
+        if self.carpeta_modelos is not None and self.carpeta_modelos.exists():
+            shutil.rmtree(self.carpeta_modelos)
 
     def historial(self, limite: int = 10) -> list[dict]:
         return self.memoria.historial(self.persona_id, limite)[::-1]

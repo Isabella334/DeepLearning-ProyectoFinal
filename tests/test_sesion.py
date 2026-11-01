@@ -227,3 +227,57 @@ def test_etiquetas_legibles():
                   "es:objeto x": 1.0, "hay:senal y": -0.5, "obj_confianza": 0.25, "algo_nuevo": 0.1})
     assert c == {"hora del día": 0.75, "cómo se ve": 0.25, "es 'objeto x'": 1.0,
                  "hay 'senal y' en la mesa": -0.5, "qué tan seguro está del nombre": 0.25, "algo_nuevo": 0.1}
+
+
+def test_objeto_caido_se_retira_y_se_puede_volver_a_poner():
+    s = Sesion.simulada(P)
+    obj = s.observar().objetos[0]
+    tipo = s.mundo.presentes()[obj.id]
+    s.mundo.colocar(obj.id, tipo, -0.45, 0.35)            # fuera de la cartulina
+    assert obj.id not in {o.id for o in s.observar().objetos}
+    assert obj.id not in s.mundo.presentes()
+    assert tipo in s.tipos_para_poner()
+    s.estimulo("poner", tipo)
+    assert tipo in [s.mundo.presentes()[o.id] for o in s.observar().objetos]
+
+
+def test_tipos_para_poner_solo_los_que_tienen_copia_libre():
+    s = Sesion.simulada(P)
+    obj = s.observar().objetos[0]
+    tipo = s.mundo.presentes()[obj.id]
+    assert tipo not in s.tipos_para_poner()
+    s.estimulo("quitar", obj.id)
+    assert tipo in s.tipos_para_poner()
+
+
+def test_reiniciar_borra_lo_aprendido_de_esa_persona(tmp_path):
+    ruta_db, modelos = str(tmp_path / "robot.db"), str(tmp_path / "modelos" / P)
+    s = Sesion(P, ruta_db=ruta_db, carpeta_modelos=modelos)
+    oid = _ensenar_uno(s)
+    _hasta_ver(s, lambda e: bool(e.objetos))
+    s.decidir()
+    s.ejecutar(confirmado=True)
+    s.responder(True)
+    s.memoria.registrar_ensenanza("otra_persona", "objeto z", "obj_9")
+    s.reiniciar()
+
+    assert s.memoria.historial(P) == [] and s.memoria.ensenanzas(P) == []
+    assert len(s.memoria.ensenanzas("otra_persona")) == 1
+    s.cerrar()
+    nueva = Sesion(P, ruta_db=ruta_db, carpeta_modelos=modelos)
+    assert not _hasta_ver(nueva, lambda e: any(o.id == oid and o.nombre == "objeto x" for o in e.objetos), 5)
+
+
+def test_pantalla_reiniciar():
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file("../app/pantalla.py", default_timeout=120)
+    at.session_state["ruta_db"] = ":memory:"
+    at.run()
+    antes = at.session_state["sesion"]
+    boton = next(b for b in at.button if b.label == "Reiniciar desde cero")
+    assert boton.disabled
+    next(c for c in at.checkbox if c.key == "confirmar_reinicio").check().run()
+    next(b for b in at.button if b.label == "Reiniciar desde cero").click().run()
+    assert not at.exception
+    assert at.session_state["sesion"] is not antes

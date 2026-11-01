@@ -106,6 +106,15 @@ def poner():
     s.observar()
 
 
+def reiniciar():
+    s = _sesion()
+    s.reiniciar()
+    s.cerrar()
+    for clave in ("sesion", "clave", "confirmar_reinicio"):
+        st.session_state.pop(clave, None)
+    _avisar(f"Listo: el robot olvidó todo lo que aprendió de {s.persona_id} y la mesa volvió a empezar.", "success")
+
+
 def quitar():
     s = _sesion()
     s.estimulo("quitar", st.session_state.get("quitar_obj"))
@@ -235,12 +244,18 @@ def barra_lateral(s: Sesion):
         st.text_input("Persona", key="persona")
         with st.expander("Avanzado"):
             st.text_input("Base de datos", key="ruta_db", help="Escribí :memory: para no guardar nada.")
+            st.checkbox("Quiero que el robot olvide todo lo que aprendió de esta persona",
+                        key="confirmar_reinicio")
+            st.button("Reiniciar desde cero", on_click=reiniciar,
+                      disabled=not st.session_state.get("confirmar_reinicio"))
 
         objetos = s.escena.objetos if s.escena else []
         st.subheader("La mesa")
         if s.mundo is not None:
-            st.selectbox("Objeto para poner", list(s.mundo.tipos), key="poner_tipo")
-            st.button("Poner en la mesa", on_click=poner)
+            disponibles = s.tipos_para_poner()
+            st.selectbox("Objeto para poner", disponibles, key="poner_tipo",
+                         help="Cada objeto existe una sola vez: si ya está en la mesa, no aparece aquí.")
+            st.button("Poner en la mesa", on_click=poner, disabled=not disponibles)
         st.selectbox("Objeto para quitar", [o.id for o in objetos], key="quitar_obj",
                      format_func=lambda oid: next((_etiqueta(o) for o in objetos if o.id == oid), oid))
         st.button("Quitar de la mesa", on_click=quitar, disabled=not objetos)
