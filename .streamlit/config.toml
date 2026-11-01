@@ -1,0 +1,19 @@
+[theme]
+base = "light"
+primaryColor = "#E8710A"
+backgroundColor = "#DCE3E6"
+secondaryBackgroundColor = "#F3F6F7"
+textColor = "#1E2830"
+font = "Atkinson Hyperlegible Next:https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;700&display=swap, sans-serif"
+codeFont = "Atkinson Hyperlegible Mono:https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;600&display=swap, monospace"
+baseRadius = "0.4rem"
+
+[theme.sidebar]
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#EEF2F4"
+
+[client]
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false

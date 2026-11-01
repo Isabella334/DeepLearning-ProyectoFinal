@@ -32,6 +32,7 @@ class Sesion:
         self.explicador = explicador or ExplicadorXAI()
         self.feedback = FeedbackPantalla()
         self.ganchos = ganchos or {}      # integracion los conecta con la simulacion
+        self.mundo = None
         self.escena: Escena | None = None
         self._pedido: Orden | None = None
         self._anteriores: set[str] = set()
@@ -43,6 +44,23 @@ class Sesion:
         self.decision: Decision | None = None
         self.explicacion: Explicacion | None = None
         self.resultado: Resultado | None = None
+
+    @classmethod
+    def simulada(cls, persona_id: str = "persona_A", ruta_db: str = ":memory:",
+                 carpeta_modelos: str | None = None, semilla: int = 0, **kwargs) -> "Sesion":
+        from asistente.cuerpo_sim import CuerpoSim, MundoSim, PercepcionSim
+
+        mundo = MundoSim(semilla=semilla)
+
+        def poner(tipo):
+            mundo.colocar(mundo.nuevo_id(), tipo, *mundo.lugar_libre(tipo))
+
+        sesion = cls(persona_id, ruta_db,
+                     percepcion=PercepcionSim(mundo, ReconocedorPocosEjemplos(modo="cabeza"), persona_id),
+                     cuerpo=CuerpoSim(mundo), ganchos={"poner": poner, "quitar": mundo.quitar},
+                     carpeta_modelos=carpeta_modelos, **kwargs)
+        sesion.mundo = mundo
+        return sesion
 
     @property
     def reconocedor(self):
@@ -102,10 +120,10 @@ class Sesion:
         self._pedido = Orden("pedido", f"{accion.value} {nombre}", nombre=nombre, accion=accion)
         self.memoria.registrar_evento(Evento("pedido", f"{accion.value}:{nombre}", self.persona_id))
 
-    def estimulo(self, tipo: str, objeto_id: str | None = None) -> None:
+    def estimulo(self, tipo: str, dato: str | None = None) -> None:
         gancho = self.ganchos.get(tipo)
         if gancho is not None:
-            gancho(objeto_id)
+            gancho(dato)
 
     def decidir(self) -> tuple[Decision, Explicacion]:
         if self.escena is None:
