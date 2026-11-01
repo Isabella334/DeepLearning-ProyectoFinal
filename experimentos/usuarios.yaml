@@ -1,0 +1,30 @@
+# Usuarios simulados para el experimento de preferencias (P2).
+#
+# Cada usuario es una REGLA OCULTA: que accion le gusta para cada tipo de objeto.
+# El ROBOT NUNCA lee este archivo: solo lo usa el usuario simulado para decir "bien" o "mal".
+# Los tipos son los del mundo falso (mocks.PercepcionFalsa.TIPOS).
+#
+#   reglas:       tipo -> accion que le gusta (apartar, traer, ignorar, acercarse)
+#   condiciones:  la accion cambia segun si hay otro objeto en la mesa
+#   por_defecto:  para los tipos que no aparecen en reglas ni condiciones
+
+usuarios:
+  ordenado:
+    descripcion: "Aparta la basura y le trae los dos lapiceros"
+    por_defecto: ignorar
+    reglas:
+      basura: apartar
+      lapicero rojo: traer
+      lapicero azul: traer
+
+  dibujante:
+    descripcion: "Le trae el borrador, aparta el lapicero azul y solo le trae el rojo si esta el cuaderno verde"
+    por_defecto: ignorar
+    reglas:
+      borrador: traer
+      lapicero azul: apartar
+    condiciones:
+      - tipo: lapicero rojo
+        si_hay: cuaderno verde
+        entonces: traer
+        si_no: ignorar

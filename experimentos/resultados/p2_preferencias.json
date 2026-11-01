@@ -1,0 +1,98 @@
+{
+  "semillas": 10,
+  "interacciones": 100,
+  "x": [
+    0,
+    5,
+    10,
+    15,
+    20,
+    25,
+    30,
+    35,
+    40,
+    45,
+    50,
+    55,
+    60,
+    65,
+    70,
+    75,
+    80,
+    85,
+    90,
+    95,
+    100
+  ],
+  "usuarios": {
+    "ordenado": {
+      "descripcion": "Aparta la basura y le trae los dos lapiceros",
+      "aciertos_promedio": [
+        0.183,
+        0.424,
+        0.558,
+        0.682,
+        0.751,
+        0.8135,
+        0.8665,
+        0.907,
+        0.949,
+        0.9625,
+        0.9685,
+        0.972,
+        0.994,
+        0.998,
+        0.999,
+        0.9995,
+        0.9995,
+        0.9995,
+        0.998,
+        1.0,
+        1.0
+      ],
+      "aciertos_a_las_30": 0.8664999999999999,
+      "aciertos_final": 1.0,
+      "primera_vez_80": 25,
+      "aprobaciones_en_linea": 0.821,
+      "cruce": {
+        "ordenado": 1.0,
+        "dibujante": 0.3075
+      }
+    },
+    "dibujante": {
+      "descripcion": "Le trae el borrador, aparta el lapicero azul y solo le trae el rojo si esta el cuaderno verde",
+      "aciertos_promedio": [
+        0.1465,
+        0.415,
+        0.4065,
+        0.5395,
+        0.6865,
+        0.7205,
+        0.766,
+        0.838,
+        0.8985,
+        0.917,
+        0.9305,
+        0.943,
+        0.9445,
+        0.947,
+        0.9445,
+        0.9475,
+        0.962,
+        0.9655,
+        0.966,
+        0.978,
+        0.978
+      ],
+      "aciertos_a_las_30": 0.7659999999999998,
+      "aciertos_final": 0.978,
+      "primera_vez_80": 35,
+      "aprobaciones_en_linea": 0.79,
+      "cruce": {
+        "ordenado": 0.31650000000000006,
+        "dibujante": 0.978
+      }
+    }
+  },
+  "distancia_pesos_final": 10.12519006729126
+}

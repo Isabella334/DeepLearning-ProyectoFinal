@@ -12,15 +12,17 @@ Para usar un modulo real, se cambia SOLO la funcion construir(). Nada mas.
 import argparse
 
 from asistente.cerebro.cerebro import CerebroAprendiz
+from asistente.cerebro.preferencias import PreferenciasRed
 from asistente.mocks import (CuerpoFalso, ExplicadorSimple, FeedbackAlAzar, FeedbackTeclado,
-                             MemoriaEnRAM, PercepcionFalsa, ReconocedorFalso, VozTeclado)
+                             MemoriaEnRAM, PercepcionFalsa, VozTeclado)
 from asistente.tipos import DESCONOCIDO, Accion, Contexto, Evento, Feedback, Resultado
+from asistente.vision.reconocedor import ReconocedorPocosEjemplos
 
 PREGUNTAS = {Accion.TRAER: "Te paso '{}'?", Accion.APARTAR: "Aparto '{}'?", Accion.ACERCARSE: "Me acerco?"}
 
 
 def construir(args):
-    reconocedor = ReconocedorFalso()          # P2 lo cambia por ReconocedorPocosEjemplos
+    reconocedor = ReconocedorPocosEjemplos(modo="cabeza")   # P2 (v2; modo="prototipo" para la v1)
     if args.modo == "sim":
         from asistente.cuerpo_sim import CuerpoSim, MundoSim, PercepcionSim
         mundo = MundoSim(ventana=args.ventana)
@@ -30,7 +32,7 @@ def construir(args):
     else:
         percepcion, cuerpo = PercepcionFalsa(reconocedor, args.persona), CuerpoFalso()
 
-    cerebro = CerebroAprendiz()               # P2 le pasa preferencias=PreferenciasRed()
+    cerebro = CerebroAprendiz(preferencias=PreferenciasRed())   # P2
     memoria = MemoriaEnRAM()                  # P4 lo cambia por MemoriaSQLite
     explicador = ExplicadorSimple()           # P4 lo cambia por ExplicadorXAI
     feedback = FeedbackTeclado() if args.feedback == "teclado" else FeedbackAlAzar()
