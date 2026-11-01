@@ -3,8 +3,11 @@ mujoco
 matplotlib
 pytest
 pyyaml
+torch
 # Integracion (vision y camara): opencv-contrib-python, ultralytics
-# P2 (reconocedor y preferencias) y P3 (anticipacion): torch, torchvision
-# P3 (voz): openai-whisper, sounddevice
+# P2 (reconocedor y preferencias): torchvision
+# P3 (voz con microfono, opcional: sin estas, VozWhisper.escuchar() devuelve None):
+openai-whisper
+sounddevice
 # P4 (gestos, opcional): mediapipe
 # P4 (XAI): shap

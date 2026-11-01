@@ -6,7 +6,9 @@ Si pasa, la pieza se puede conectar con las demas.
 import numpy as np
 
 from asistente import mocks
+from asistente.cerebro.cerebro import CerebroAprendiz
 from asistente.cerebro.preferencias import PreferenciasRed
+from asistente.voz import VozWhisper
 from asistente.interfaces import (Cerebro, Cuerpo, Detector, Explicador, Memoria, Percepcion,
                                   Reconocedor, Voz)
 from asistente.tipos import (DESCONOCIDO, Accion, Contexto, Decision, Deteccion, Escena,
@@ -18,8 +20,9 @@ RECONOCEDORES = [lambda: mocks.ReconocedorFalso(), lambda: ReconocedorPocosEjemp
                  lambda: ReconocedorPocosEjemplos(modo="cabeza")]
 PERCEPCIONES = [lambda: mocks.PercepcionFalsa(), lambda: mocks.PercepcionFalsa(ReconocedorPocosEjemplos())]
 CUERPOS = [lambda: mocks.CuerpoFalso()]
-CEREBROS = [lambda: mocks.CerebroAlAzar()]
-VOCES = [lambda: mocks.VozTeclado()]
+CEREBROS = [lambda: mocks.CerebroAlAzar(), lambda: CerebroAprendiz(),
+            lambda: CerebroAprendiz(preferencias=PreferenciasRed())]
+VOCES = [lambda: mocks.VozTeclado(), lambda: VozWhisper()]
 MEMORIAS = [lambda: mocks.MemoriaEnRAM()]
 DETECTORES = [lambda: mocks.DetectorFalso()]
 EXPLICADORES = [lambda: mocks.ExplicadorSimple()]
@@ -110,6 +113,7 @@ def test_detector():
 
 
 def test_mitades_del_cerebro():
+    from asistente.cerebro.anticipacion import AnticipacionFrecuencias, AnticipacionSecuencias
     from asistente.cerebro.contratos import (AnticipacionFalsa, ModeloAnticipacion,
                                              ModeloPreferencias, PreferenciasFalsas)
     ctx = _contexto()
@@ -118,7 +122,7 @@ def test_mitades_del_cerebro():
         assert set(p.puntajes(ctx, None)) <= set(Accion)
         assert len(p.vector(ctx, None)) == len(p.nombres_caracteristicas())
         assert isinstance(p.clonar(), ModeloPreferencias)
-    for a in [AnticipacionFalsa()]:           # agregar aqui el ModeloAnticipacion de P3
+    for a in [AnticipacionFalsa(), AnticipacionFrecuencias(), AnticipacionSecuencias()]:
         assert isinstance(a, ModeloAnticipacion)
         pedido, prob = a.predecir([])
         assert 0.0 <= prob <= 1.0
