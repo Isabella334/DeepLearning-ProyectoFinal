@@ -5,7 +5,8 @@ pytest
 pyyaml
 torch
 # Integracion (vision y camara): opencv-contrib-python, ultralytics
-# P2 (reconocedor y preferencias): torchvision
+# P2 (reconocedor y preferencias):
+torchvision
 # P3 (voz con microfono, opcional: sin estas, VozWhisper.escuchar() devuelve None):
 openai-whisper
 sounddevice
