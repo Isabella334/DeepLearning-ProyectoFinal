@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Callable
 
 from asistente.cerebro.cerebro import CerebroAprendiz
@@ -20,8 +21,10 @@ class Sesion:
     def __init__(self, persona_id: str = "persona_A", ruta_db: str = ":memory:",
                  percepcion: Percepcion | None = None, cuerpo: Cuerpo | None = None,
                  cerebro: Cerebro | None = None, explicador: Explicador | None = None,
-                 ganchos: dict[str, Callable[[str | None], None]] | None = None):
+                 ganchos: dict[str, Callable[[str | None], None]] | None = None,
+                 carpeta_modelos: str | None = None):
         self.persona_id = persona_id
+        self.carpeta_modelos = Path(carpeta_modelos) if carpeta_modelos else None
         self.percepcion = percepcion or PercepcionFalsa(ReconocedorPocosEjemplos(modo="cabeza"), persona_id)
         self.cuerpo = cuerpo or CuerpoFalso()
         self.cerebro = cerebro or CerebroAprendiz(preferencias=PreferenciasRed())
@@ -33,12 +36,35 @@ class Sesion:
         self._pedido: Orden | None = None
         self._anteriores: set[str] = set()
         self._limpiar()
+        self._cargar_modelos()
 
     def _limpiar(self) -> None:
         self.contexto: Contexto | None = None
         self.decision: Decision | None = None
         self.explicacion: Explicacion | None = None
         self.resultado: Resultado | None = None
+
+    @property
+    def reconocedor(self):
+        return getattr(self.percepcion, "reconocedor", None)
+
+    def _cargar_modelos(self) -> None:
+        if self.carpeta_modelos is None:
+            return
+        if (self.carpeta_modelos / "cerebro" / "cerebro.json").exists():
+            self.cerebro.cargar(str(self.carpeta_modelos / "cerebro"))
+        if self.reconocedor is not None and (self.carpeta_modelos / "reconocedor" / "reconocedor.json").exists():
+            self.reconocedor.cargar(str(self.carpeta_modelos / "reconocedor"))
+
+    def guardar(self) -> bool:
+        if self.carpeta_modelos is None:
+            return False
+        self.cerebro.guardar(str(self.carpeta_modelos / "cerebro"))
+        if self.reconocedor is not None:
+            self.reconocedor.guardar(str(self.carpeta_modelos / "reconocedor"))
+        version = len(self.memoria.modelos(self.persona_id)) + 1
+        self.memoria.registrar_modelo(self.persona_id, version, str(self.carpeta_modelos))
+        return True
 
     @property
     def objeto(self):
@@ -69,6 +95,7 @@ class Sesion:
             return False
         self.percepcion.ensenar(self.persona_id, objeto_id, nombre)
         self.memoria.registrar_ensenanza(self.persona_id, nombre, objeto_id)
+        self.guardar()
         return True
 
     def pedir(self, nombre: str, accion: Accion = Accion.TRAER) -> None:
@@ -114,6 +141,8 @@ class Sesion:
             self.memoria.registrar_evento(Evento("feedback", "si" if fb.aprobado else "no", self.persona_id))
         resultado = self.resultado or Resultado(False, 0.0, "no se ejecuto")
         id_ = self.memoria.registrar_interaccion(self.contexto, self.decision, resultado, fb)
+        if fb is not None:
+            self.guardar()
         self._limpiar()
         return id_
 

@@ -121,3 +121,11 @@ def test_exportar_csv(tmp_path):
     with open(interacciones, encoding="utf-8") as f:
         filas = list(csv.DictReader(f))
     assert len(filas) == 2 and "aprobado" in filas[0]
+
+
+def test_modelos_por_persona():
+    m = MemoriaSQLite()
+    m.registrar_modelo("A", 1, "modelos/a")
+    m.registrar_modelo("A", 2, "modelos/a")
+    assert [f["version"] for f in m.modelos("A")] == ["1", "2"]
+    assert m.modelos("B") == []

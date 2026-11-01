@@ -94,6 +94,10 @@ class MemoriaSQLite(Memoria):
         return [dict(f) for f in self._leer("SELECT * FROM ensenanzas WHERE persona_id = ? ORDER BY id",
                                             (persona_id,))]
 
+    def modelos(self, persona_id: str) -> list[dict]:
+        return [dict(f) for f in self._leer("SELECT * FROM modelos WHERE persona_id = ? ORDER BY id",
+                                            (persona_id,))]
+
     def exportar_csv(self, carpeta: str) -> list[Path]:
         destino = Path(carpeta)
         destino.mkdir(parents=True, exist_ok=True)

@@ -133,3 +133,25 @@ def test_persiste_entre_sesiones(tmp_path):
     s.responder(True)
     s.cerrar()
     assert len(Sesion(P, ruta_db=ruta).historial()) == 1
+
+
+def test_lo_aprendido_sobrevive_al_reabrir(tmp_path):
+    ruta_db, modelos = str(tmp_path / "robot.db"), str(tmp_path / "modelos")
+    s = Sesion(P, ruta_db=ruta_db, carpeta_modelos=modelos)
+    oid = _ensenar_uno(s)
+    _hasta_ver(s, lambda e: bool(e.objetos))
+    s.decidir()
+    s.ejecutar(confirmado=True)
+    s.responder(True)
+    s.cerrar()
+
+    otra = Sesion(P, ruta_db=ruta_db, carpeta_modelos=modelos)
+    assert _hasta_ver(otra, lambda e: any(o.id == oid and o.nombre == "objeto x" for o in e.objetos))
+    assert otra.cerebro.preferencias_de(P).n_actualizaciones == 1
+    assert otra.memoria.modelos(P)
+
+
+def test_sin_carpeta_no_guarda_modelos():
+    s = Sesion(P)
+    _ensenar_uno(s)
+    assert s.memoria.modelos(P) == []
