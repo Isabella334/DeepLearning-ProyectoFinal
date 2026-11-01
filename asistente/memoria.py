@@ -98,6 +98,12 @@ class MemoriaSQLite(Memoria):
         return [dict(f) for f in self._leer("SELECT * FROM modelos WHERE persona_id = ? ORDER BY id",
                                             (persona_id,))]
 
+    def olvidar(self, persona_id: str) -> None:
+        with self.candado, self.con:
+            for tabla in TABLAS:
+                self.con.execute(f"DELETE FROM {tabla} WHERE {'id' if tabla == 'personas' else 'persona_id'} = ?",
+                                 (persona_id,))
+
     def exportar_csv(self, carpeta: str) -> list[Path]:
         destino = Path(carpeta)
         destino.mkdir(parents=True, exist_ok=True)

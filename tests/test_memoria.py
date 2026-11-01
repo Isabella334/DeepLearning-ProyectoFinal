@@ -129,3 +129,16 @@ def test_modelos_por_persona():
     m.registrar_modelo("A", 2, "modelos/a")
     assert [f["version"] for f in m.modelos("A")] == ["1", "2"]
     assert m.modelos("B") == []
+
+
+def test_olvidar_persona():
+    m = MemoriaSQLite()
+    _interaccion(m, "A")
+    _interaccion(m, "B")
+    m.registrar_evento(Evento("aparecio", "objeto x", "A"))
+    m.registrar_ensenanza("A", "objeto x", "obj_1")
+    m.registrar_modelo("A", 1, "modelos/a")
+    m.olvidar("A")
+    assert m.historial("A") == [] and m.eventos_recientes("A") == []
+    assert m.ensenanzas("A") == [] and m.modelos("A") == []
+    assert len(m.historial("B")) == 1
