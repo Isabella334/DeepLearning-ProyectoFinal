@@ -6,6 +6,7 @@ Ejemplos:
     python main.py --modo falso --voz teclado --feedback teclado   # vos le hablas (escribiendo)
     python main.py --modo sim --pasos 3                      # cuerpo y percepcion en MuJoCo
     python main.py --modo falso --voz whisper --feedback teclado   # le hablas por el microfono
+    python main.py --modo real --voz teclado --feedback teclado --ventana   # version B: camara + carrito virtual
 
 Para usar un modulo real, se cambia SOLO la funcion construir(). Nada mas.
 """
@@ -28,7 +29,14 @@ def construir(args):
         mundo = MundoSim(ventana=args.ventana)
         percepcion, cuerpo = PercepcionSim(mundo, reconocedor, args.persona), CuerpoSim(mundo)
     elif args.modo == "real":
-        raise SystemExit("Modo real: lo conecta integracion (vision/percepcion_camara.py y hardware/).")
+        # Version B, gemelo digital: la camara ve la cartulina real y el carrito virtual actua
+        from asistente.cuerpo_sim import CuerpoSim, MundoSim
+        from asistente.vision.percepcion_camara import PercepcionCamara
+        mundo = MundoSim(ventana=args.ventana, con_camara=True, iniciales=[])
+        camara = int(args.camara) if str(args.camara).isdigit() else args.camara
+        percepcion = PercepcionCamara(reconocedor, camara=camara, persona_id=args.persona,
+                                      mundo=mundo, ventana=not args.sin_vista)
+        cuerpo = CuerpoSim(mundo)
     else:
         percepcion, cuerpo = PercepcionFalsa(reconocedor, args.persona), CuerpoFalso()
 
@@ -125,6 +133,9 @@ def main():
     ap.add_argument("--persona", default="persona_A")
     ap.add_argument("--pasos", type=int, default=5)
     ap.add_argument("--ventana", action="store_true")
+    ap.add_argument("--camara", default="0", help="modo real: numero de webcam o ruta de un video")
+    ap.add_argument("--sin-vista", dest="sin_vista", action="store_true",
+                    help="modo real: no abrir la ventana con lo que ve la camara")
     args = ap.parse_args()
 
     percepcion, cuerpo, cerebro, memoria, explicador, entrada, voz = construir(args)
@@ -136,6 +147,8 @@ def main():
                                   args.persona, anteriores)
     finally:
         cuerpo.cerrar()
+        if hasattr(percepcion, "cerrar"):
+            percepcion.cerrar()
     print(f"\nInteracciones guardadas: {len(memoria.historial(args.persona))}")
 
 
