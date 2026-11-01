@@ -182,3 +182,17 @@ def test_shap_con_preferencias_red():
     e = ExplicadorXAI().explicar(ctx, d, cerebro, MemoriaSQLite())
     nombres = set(cerebro.preferencias_de(P).nombres_caracteristicas())
     assert e.contribuciones and set(e.contribuciones) <= nombres
+
+
+def test_evidencia_en_singular():
+    m = MemoriaSQLite()
+    ctx = _contexto()
+    m.registrar_interaccion(ctx, _decision("preferencia"), Resultado(True, 0.0), Feedback(P, True))
+    assert "1 de 1 vez." in ExplicadorXAI().explicar(ctx, _decision("preferencia"), None, m).evidencia
+
+    m = MemoriaSQLite()
+    m.registrar_evento(Evento("aparecio", "senal y", P, t=time.time() - 600))
+    actual = Evento("aparecio", "senal y", P)
+    m.registrar_evento(actual)
+    e = ExplicadorXAI().explicar(_contexto(eventos=[actual]), _decision("anticipacion"), None, m)
+    assert e.evidencia == "La única vez que apareció 'senal y', no me pediste 'objeto x'."

@@ -90,7 +90,7 @@ class ExplicadorXAI(Explicador):
         if not calificadas:
             return "Es la primera vez que lo hago."
         aprobadas = sum(1 for h in calificadas if h["aprobado"])
-        return f"Aprobaste esto {aprobadas} de {len(calificadas)} veces."
+        return f"Aprobaste esto {aprobadas} de {len(calificadas)} {'vez' if len(calificadas) == 1 else 'veces'}."
 
     def _evidencia_habito(self, contexto: Contexto, decision: Decision, nombre: str,
                           memoria: Memoria) -> str | None:
@@ -106,4 +106,7 @@ class ExplicadorXAI(Explicador):
         if not apariciones:
             return None
         seguidas = sum(1 for t in apariciones if any(t <= tp <= t + self.ventana_s for tp in pedidos))
+        if len(apariciones) == 1:
+            pidio = "me pediste" if seguidas else "no me pediste"
+            return f"La única vez que apareció '{senal}', {pidio} '{nombre}'."
         return f"En {seguidas} de las {len(apariciones)} veces que apareció '{senal}', me pediste '{nombre}'."
