@@ -22,13 +22,16 @@ def cargar_config(ruta=RUTA_CONFIG) -> dict:
         return yaml.safe_load(f)
 
 
-def cargar_tipos(cfg: dict, ruta=RUTA_TIPOS) -> dict:
+def cargar_tipos(cfg: dict, ruta=RUTA_TIPOS, con_camara: bool = False) -> dict:
     with open(ruta, encoding="utf-8") as f:
         tipos = yaml.safe_load(f)
     faltan = [n for n in cfg["objetos_del_experimento"] if n not in tipos]
     if faltan:
         raise ValueError(f"Faltan en {ruta.name}: {faltan}")
-    return {n: tipos[n] for n in cfg["objetos_del_experimento"]}
+    elegidos = {n: tipos[n] for n in cfg["objetos_del_experimento"]}
+    if con_camara:   # tipos genericos para los objetos reales que ve la camara (version B)
+        elegidos.update({n: t for n, t in tipos.items() if t.get("camara") and n not in elegidos})
+    return elegidos
 
 
 def radio(tipo: dict) -> float:
@@ -255,9 +258,9 @@ class MundoSim:
     """El mundo sabe que es cada objeto (tipo oculto); el robot no."""
 
     def __init__(self, ventana: bool = False, cfg: dict | None = None, semilla: int = 0,
-                 iniciales: list[str] | None = None):
+                 iniciales: list[str] | None = None, con_camara: bool = False):
         self.cfg = cfg or cargar_config()
-        self.tipos = cargar_tipos(self.cfg)
+        self.tipos = cargar_tipos(self.cfg, con_camara=con_camara)
         xml, self.casillas = construir_xml(self.cfg, self.tipos)
         self.model = mujoco.MjModel.from_xml_string(xml)
         self.data = mujoco.MjData(self.model)

@@ -51,3 +51,37 @@ cuaderno verde:
   aspecto: [0.1, 1.0, 0.2, 0.3]
   empujable: false
   al_inicio: false
+
+# ---- Objetos REALES vistos por la camara (version B, gemelo digital) ----
+# La camara no sabe que forma tiene cada objeto: se elige el tamano mas parecido al que mide
+# (ancho de su caja en metros). "camara: true" hace que existan aunque no esten en config.yaml.
+real pequeno:
+  forma: box
+  tamano: [0.02, 0.02, 0.008]
+  masa: 0.02
+  rgba: [0.85, 0.55, 0.2, 1]
+  aspecto: [0.0, 0.0, 0.0, 1.0]
+  al_inicio: false
+  copias: 12
+  camara: true
+
+real mediano:
+  forma: box
+  tamano: [0.045, 0.03, 0.01]
+  masa: 0.05
+  rgba: [0.7, 0.4, 0.75, 1]
+  aspecto: [0.0, 0.0, 1.0, 0.0]
+  al_inicio: false
+  copias: 8
+  camara: true
+
+real grande:
+  forma: box
+  tamano: [0.1, 0.08, 0.008]
+  masa: 0.4
+  rgba: [0.5, 0.5, 0.55, 1]
+  aspecto: [0.0, 1.0, 0.0, 0.0]
+  empujable: false
+  al_inicio: false
+  copias: 4
+  camara: true
