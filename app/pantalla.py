@@ -275,11 +275,13 @@ def barra_lateral(s: Sesion):
             st.button("Quitar de la mesa", on_click=quitar, disabled=not objetos)
 
         st.subheader("Enseñar un nombre")
-        desconocidos = [o for o in objetos if o.nombre == DESCONOCIDO]
-        st.selectbox("Objeto sin nombre", [o.id for o in desconocidos], key="ensenar_obj",
-                     format_func=lambda oid: next((_ubicacion(o) for o in desconocidos if o.id == oid), oid))
+        # Primero los que no tienen nombre; tambien se puede elegir uno con nombre para CORREGIRLO
+        candidatos = sorted(objetos, key=lambda o: o.nombre != DESCONOCIDO)
+        st.selectbox("Objeto (sin nombre, o uno mal reconocido para corregirlo)", [o.id for o in candidatos],
+                     key="ensenar_obj",
+                     format_func=lambda oid: next((_etiqueta(o) for o in candidatos if o.id == oid), oid))
         st.text_input("Su nombre", key="ensenar_nombre", placeholder="mi lapicero")
-        st.button("Enseñar", on_click=ensenar, disabled=not desconocidos)
+        st.button("Enseñar", on_click=ensenar, disabled=not objetos)
 
         st.subheader("Pedir algo")
         conocidos = s.reconocedor.nombres(s.persona_id) if s.reconocedor else []

@@ -71,13 +71,18 @@ def atender_voz(voz, percepcion, memoria, persona_id, escena):
     if orden is None:
         return None, None
     if orden.tipo == "ensenar":
-        # Se le pone el nombre al objeto desconocido mas reciente de la mesa
+        # Se le pone el nombre al objeto desconocido mas reciente. Si todos tienen nombre, al mas
+        # reciente de la mesa: asi se corrige un error ("esto es mi tijera" cuando dijo "cinta").
         desconocidos = [o for o in escena.objetos if o.nombre == DESCONOCIDO]
-        if desconocidos:
-            obj = desconocidos[-1]
+        obj = desconocidos[-1] if desconocidos else (escena.objetos[-1] if escena.objetos else None)
+        if obj is not None:
+            antes = obj.nombre
             percepcion.ensenar(persona_id, obj.id, orden.nombre)
             memoria.registrar_ensenanza(persona_id, orden.nombre, obj.id)
-            print(f"   Aprendido: {obj.id} es '{orden.nombre}'")
+            if antes == DESCONOCIDO:
+                print(f"   Aprendido: {obj.id} es '{orden.nombre}'")
+            else:
+                print(f"   Corregido: {obj.id} no es '{antes}', es '{orden.nombre}'")
         return None, None
     if orden.tipo == "feedback":
         return None, Feedback(persona_id, orden.aprobado, fuente="voz")
