@@ -16,13 +16,19 @@ Probar solo la camara (sin el resto del robot):
 """
 from __future__ import annotations
 
+import sys
 import time
+from pathlib import Path
 
 import numpy as np
 
 from ..configuracion import cargar_config
 from ..interfaces import Percepcion
 from ..tipos import DESCONOCIDO, Escena, Objeto, PoseCarrito
+
+# La ultima calibracion buena (homografia) se guarda aqui: si la camara no se mueve, sirve
+# aunque despues algun marcador no se vea (por reflejo, una mano encima, etc.)
+CALIBRACION = Path(__file__).resolve().parents[2] / "modelos" / "calibracion_camara.npy"
 
 # Tamano del objeto simulado segun lo ancho que se ve en la camara (metros)
 TAMANOS = [(0.06, "real pequeno"), (0.13, "real mediano"), (float("inf"), "real grande")]
@@ -47,13 +53,16 @@ class Rastro:
 class PercepcionCamara(Percepcion):
     def __init__(self, reconocedor, detector=None, camara=0, persona_id: str = "persona_A",
                  mundo=None, ventana: bool = False, cfg: dict | None = None,
-                 distancia_max: float = 0.07, olvidar_tras: int = 3, ancho: int = 1280, alto: int = 720):
+                 distancia_max: float = 0.07, olvidar_tras: int = 3, ancho: int = 1280, alto: int = 720,
+                 guardar_calibracion: bool | None = None):
         """camara: numero de webcam, ruta de un video, o cualquier objeto con .read() como cv2.
         mundo: MundoSim(con_camara=True) para el gemelo digital (opcional)."""
         import cv2
         self.cv2 = cv2
         self.cfg = cfg or cargar_config()
         self.reconocedor, self.persona_id, self.mundo, self.ventana = reconocedor, persona_id, mundo, ventana
+        if guardar_calibracion is None:       # por defecto, solo con una webcam de verdad
+            guardar_calibracion = isinstance(camara, int)
         if detector is None:
             from .detector import DetectorYOLO
             detector = DetectorYOLO()
@@ -65,7 +74,14 @@ class PercepcionCamara(Percepcion):
             self.cap = camara
         else:
             self._vaciar = 4 if isinstance(camara, int) else 1
-            self.cap = cv2.VideoCapture(camara)
+            if isinstance(camara, int) and sys.platform == "win32":
+                # En Windows, DirectShow abre la webcam al instante (el modo por defecto puede trabarse)
+                self.cap = cv2.VideoCapture(camara, cv2.CAP_DSHOW)
+            else:
+                self.cap = cv2.VideoCapture(camara)
+            if not self.cap.isOpened():
+                raise RuntimeError(f"No se pudo abrir la camara {camara!r}. Proba con --camara 1 (o 2), "
+                                   "o revisa que ningun otro programa la este usando.")
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, ancho)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, alto)
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -80,10 +96,16 @@ class PercepcionCamara(Percepcion):
         self.medio = np.array([cart["ancho"] / 2, cart["alto"] / 2])
 
         self.H = None                         # homografia pixeles -> metros (la ultima buena)
+        self.ruta_calibracion = CALIBRACION if guardar_calibracion else None
+        if self.ruta_calibracion is not None and self.ruta_calibracion.exists():
+            self.H = np.load(self.ruta_calibracion)
+            print(f"   (camara) Usando la calibracion guardada ({self.ruta_calibracion.name}). "
+                  "Si moviste la camara, se actualiza sola cuando vea las 4 esquinas.")
         self.rastros: list[Rastro] = []
         self._n = 0
         self.ultima: Escena | None = None
         self.ultimo_cuadro = None
+        self.vista = None                     # imagen con cajas, ids y nombres (BGR), para la pantalla
 
     # ------------------------------------------------------------------ geometria
     def _leer(self):
@@ -108,6 +130,9 @@ class PercepcionCamara(Percepcion):
             src = np.array([vistos[i].mean(axis=0) for i in comunes], np.float32)
             dst = np.array([self.centros[i] for i in comunes], np.float32)
             self.H = self.cv2.getPerspectiveTransform(src, dst)
+            if self.ruta_calibracion is not None:
+                self.ruta_calibracion.parent.mkdir(parents=True, exist_ok=True)
+                np.save(self.ruta_calibracion, self.H)
         return vistos
 
     def a_metros(self, puntos_px) -> np.ndarray:
@@ -124,6 +149,17 @@ class PercepcionCamara(Percepcion):
         vistos = self._homografia(cuadro)
         if self.H is None:
             print("   (camara) Todavia no veo las 4 esquinas: acomoda la camara.")
+            self.vista = cuadro.copy()
+            for i, c in vistos.items():           # los que si ve, en verde con su numero
+                self.cv2.polylines(self.vista, [c.astype(np.int32)], True, (0, 200, 0), 3)
+                self.cv2.putText(self.vista, str(i), tuple(int(v) for v in c.mean(axis=0)),
+                                 self.cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 200, 0), 3)
+            faltan = sorted(set(self.centros) - set(vistos))
+            self.cv2.putText(self.vista, f"Necesito ver las 4 esquinas UNA vez. Faltan: {faltan}", (20, 35),
+                             self.cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+            if self.ventana:
+                self.cv2.imshow("Lo que ve el robot", self.vista)
+                self.cv2.waitKey(1)
             return self._escena([], vistos)
 
         cajas, puntos, anchos = [], [], []
@@ -152,8 +188,10 @@ class PercepcionCamara(Percepcion):
         if self.mundo is not None:
             self.sincronizar()
         activos = [r for r in self.rastros if r.perdido == 0]
+        self.vista = self._dibujar(cuadro, activos, cajas, vistos)
         if self.ventana:
-            self._dibujar(cuadro, activos, cajas, vistos)
+            self.cv2.imshow("Lo que ve el robot", self.vista)
+            self.cv2.waitKey(1)
         return self._escena(activos, vistos)
 
     def ensenar(self, persona_id, objeto_id, nombre):
@@ -241,6 +279,7 @@ class PercepcionCamara(Percepcion):
         return PoseCarrito(0.0, -self.medio[1] + 0.07, np.pi / 2)
 
     def _dibujar(self, cuadro, rastros, cajas, vistos):
+        """Devuelve la imagen de la camara con lo que entendio el robot encima."""
         cv2 = self.cv2
         vista = cuadro.copy()
         for c in vistos.values():
@@ -253,10 +292,10 @@ class PercepcionCamara(Percepcion):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
         for x1, y1, x2, y2 in cajas:
             cv2.rectangle(vista, (x1, y1), (x2, y2), (255, 200, 0), 1)
-        estado = "Esquinas OK" if len([i for i in self.centros if i in vistos]) == 4 else "Esquinas: usando la ultima medicion"
+        estado = ("Esquinas OK (calibracion guardada)" if len([i for i in self.centros if i in vistos]) == 4
+                  else "Faltan esquinas: usando la calibracion guardada")
         cv2.putText(vista, estado, (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        cv2.imshow("Lo que ve el robot", vista)
-        cv2.waitKey(1)
+        return vista
 
 
 def main():

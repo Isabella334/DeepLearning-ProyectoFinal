@@ -1,0 +1,46 @@
+{
+  "modelo": "YOLOv8n preentrenado en COCO, ajuste fino con una sola clase ('objeto')",
+  "entrenamiento": {
+    "epocas_max": 80,
+    "imgsz": 640,
+    "patience": 20,
+    "preprocesamiento": "Auto-Orient; Resize 640x640 Fit (black edges)",
+    "aumentacion": "Flip horizontal, brillo +-20%, blur hasta 1 px, salida 3x (solo train)"
+  },
+  "dataset": {
+    "videos_grabados": 5,
+    "fotos_extraidas_1_por_segundo": 1412,
+    "fotos_por_sesion": {
+      "sesion1_calibrar": 53,
+      "sesion1_cuadernos": 241,
+      "sesion1_cubeta": 675,
+      "sesion1_resto": 207,
+      "sesion1_todo": 236
+    },
+    "fotos_etiquetadas": 281,
+    "seleccion": "se descarto el 25% mas borroso de cada sesion y se tomaron fotos repartidas en el tiempo",
+    "division": {
+      "train": 211,
+      "valid": 35,
+      "test": 35
+    },
+    "train_con_aumentacion": 633,
+    "test": "ultimo 35% del video 'todo' (escena con todos los objetos), separado 5% del tramo de entrenamiento; nunca visto al entrenar",
+    "etiquetado": "Roboflow Auto Label (GPT-6.1 Terra, prompt en ingles) + revision manual de todas las fotos"
+  },
+  "metricas": {
+    "validacion": {
+      "mAP50": 0.9419,
+      "mAP50_95": 0.7443,
+      "precision": 0.9705,
+      "recall": 0.8826
+    },
+    "prueba": {
+      "mAP50": 0.8056,
+      "mAP50_95": 0.5552,
+      "precision": 0.8689,
+      "recall": 0.7169
+    }
+  },
+  "figuras": "docs/figuras/entrenamiento_*, validacion_*, prueba_*"
+}

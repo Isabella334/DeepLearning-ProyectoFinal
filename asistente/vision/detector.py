@@ -8,12 +8,17 @@ Los nombres los pone despues el Reconocedor de cada persona.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from ..interfaces import Detector
 from ..tipos import Deteccion
 
 
+PESOS = Path(__file__).resolve().parents[2] / "modelos" / "detector" / "best.pt"
+
+
 class DetectorYOLO(Detector):
-    def __init__(self, ruta_pesos: str = "modelos/detector/best.pt", confianza_min: float = 0.35,
+    def __init__(self, ruta_pesos: str = str(PESOS), confianza_min: float = 0.35,
                  imgsz: int = 640):
         from ultralytics import YOLO          # import aqui: solo lo necesita quien use el detector
         self.modelo = YOLO(ruta_pesos)

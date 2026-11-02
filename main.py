@@ -14,10 +14,13 @@ import argparse
 
 from asistente.cerebro.cerebro import CerebroAprendiz
 from asistente.cerebro.preferencias import PreferenciasRed
-from asistente.mocks import (CuerpoFalso, ExplicadorSimple, FeedbackAlAzar, FeedbackTeclado,
-                             MemoriaEnRAM, PercepcionFalsa, VozTeclado)
+from pathlib import Path
+
+from asistente.memoria import MemoriaSQLite
+from asistente.mocks import CuerpoFalso, FeedbackAlAzar, FeedbackTeclado, PercepcionFalsa, VozTeclado
 from asistente.tipos import DESCONOCIDO, Accion, Contexto, Evento, Feedback, Resultado
 from asistente.vision.reconocedor import ReconocedorPocosEjemplos
+from asistente.xai.explicador import ExplicadorXAI
 
 PREGUNTAS = {Accion.TRAER: "Te paso '{}'?", Accion.APARTAR: "Aparto '{}'?", Accion.ACERCARSE: "Me acerco?"}
 
@@ -41,8 +44,8 @@ def construir(args):
         percepcion, cuerpo = PercepcionFalsa(reconocedor, args.persona), CuerpoFalso()
 
     cerebro = CerebroAprendiz(preferencias=PreferenciasRed())   # P2
-    memoria = MemoriaEnRAM()                  # P4 lo cambia por MemoriaSQLite
-    explicador = ExplicadorSimple()           # P4 lo cambia por ExplicadorXAI
+    memoria = MemoriaSQLite(getattr(args, "db", ":memory:"))   # P4: todo queda guardado en robot.db
+    explicador = ExplicadorXAI()                                 # P4: texto + evidencia + SHAP
     feedback = FeedbackTeclado() if args.feedback == "teclado" else FeedbackAlAzar()
     voz = None
     if args.voz == "teclado":
@@ -59,7 +62,11 @@ def atender_voz(voz, percepcion, memoria, persona_id, escena):
         return None, None
     if hasattr(voz, "vocabulario"):       # los nombres que ya conoce ayudan a Whisper a entenderlos
         voz.vocabulario = sorted({o.nombre for o in escena.objetos if o.nombre != DESCONOCIDO})
+    if not isinstance(voz, VozTeclado):
+        print(f"   >> Escuchando... deci '{getattr(voz, 'nombre_robot', 'robot')}, ...' (5 s)")
     texto = voz.escuchar()
+    if texto and not isinstance(voz, VozTeclado):
+        print(f"   Oi: \"{texto}\"")
     orden = voz.interpretar(texto) if texto else None
     if orden is None:
         return None, None
@@ -125,6 +132,37 @@ def un_ciclo(percepcion, cuerpo, cerebro, memoria, explicador, entrada, voz, per
     return actuales
 
 
+RAIZ = Path(__file__).resolve().parent
+
+
+def carpeta_modelos(args) -> Path | None:
+    """Misma carpeta que usa la pantalla: lo aprendido en una sirve en la otra."""
+    return None if getattr(args, "db", ":memory:") == ":memory:" else RAIZ / "modelos" / args.persona
+
+
+def cargar_modelos(args, cerebro, percepcion):
+    """Lo que el robot aprendio de esta persona en sesiones anteriores (mismo formato que la pantalla)."""
+    carpeta = carpeta_modelos(args)
+    if carpeta is None:
+        return
+    if (carpeta / "cerebro" / "cerebro.json").exists():
+        cerebro.cargar(str(carpeta / "cerebro"))
+    rec = getattr(percepcion, "reconocedor", None)
+    if rec is not None and (carpeta / "reconocedor" / "reconocedor.json").exists():
+        rec.cargar(str(carpeta / "reconocedor"))
+    print(f"(Modelos de {args.persona} cargados de {carpeta})")
+
+
+def guardar_modelos(args, cerebro, percepcion):
+    carpeta = carpeta_modelos(args)
+    if carpeta is None:
+        return
+    cerebro.guardar(str(carpeta / "cerebro"))
+    rec = getattr(percepcion, "reconocedor", None)
+    if rec is not None:
+        rec.guardar(str(carpeta / "reconocedor"))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--modo", choices=["falso", "sim", "real"], default="falso")
@@ -132,6 +170,8 @@ def main():
     ap.add_argument("--voz", choices=["no", "teclado", "whisper"], default="no")
     ap.add_argument("--persona", default="persona_A")
     ap.add_argument("--pasos", type=int, default=5)
+    ap.add_argument("--db", default=str(RAIZ / "robot.db"),
+                    help="base de datos, la misma de la pantalla (':memory:' para no guardar nada)")
     ap.add_argument("--ventana", action="store_true")
     ap.add_argument("--camara", default="0", help="modo real: numero de webcam o ruta de un video")
     ap.add_argument("--sin-vista", dest="sin_vista", action="store_true",
@@ -139,12 +179,14 @@ def main():
     args = ap.parse_args()
 
     percepcion, cuerpo, cerebro, memoria, explicador, entrada, voz = construir(args)
+    cargar_modelos(args, cerebro, percepcion)
     anteriores = set()
     try:
         for i in range(args.pasos):
             print(f"\nCiclo {i + 1}")
             anteriores = un_ciclo(percepcion, cuerpo, cerebro, memoria, explicador, entrada, voz,
                                   args.persona, anteriores)
+            guardar_modelos(args, cerebro, percepcion)
     finally:
         cuerpo.cerrar()
         if hasattr(percepcion, "cerrar"):

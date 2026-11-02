@@ -66,6 +66,30 @@ class Sesion:
         sesion.mundo = mundo
         return sesion
 
+    @classmethod
+    def camara(cls, persona_id: str = "persona_A", ruta_db: str = ":memory:",
+               carpeta_modelos: str | None = None, camara=0, **kwargs) -> "Sesion":
+        """Version B (gemelo digital): la camara ve la cartulina real y el carrito virtual actua.
+        Los objetos se ponen y se quitan con la mano en la mesa de verdad."""
+        from asistente.cuerpo_sim import CuerpoSim, MundoSim
+        from asistente.vision.percepcion_camara import PercepcionCamara
+
+        mundo = MundoSim(con_camara=True, iniciales=[])
+        percepcion = PercepcionCamara(ReconocedorPocosEjemplos(modo="cabeza"), camara=camara,
+                                      persona_id=persona_id, mundo=mundo)
+        sesion = cls(persona_id, ruta_db, percepcion=percepcion, cuerpo=CuerpoSim(mundo),
+                     carpeta_modelos=carpeta_modelos, **kwargs)
+        sesion.mundo, sesion.con_camara = mundo, True
+        return sesion
+
+    con_camara = False
+
+    @property
+    def vista_camara(self):
+        """Lo que ve la camara con cajas e ids (RGB), o None si no hay camara."""
+        vista = getattr(self.percepcion, "vista", None)
+        return None if vista is None else vista[..., ::-1]
+
     @property
     def reconocedor(self):
         return getattr(self.percepcion, "reconocedor", None)
@@ -100,7 +124,7 @@ class Sesion:
                 and self.decision.accion != Accion.IGNORAR)
 
     def tipos_para_poner(self) -> list[str]:
-        if self.mundo is None:
+        if self.mundo is None or self.con_camara:
             return []
         libres = {t for b, t in self.mundo.casillas if b not in self.mundo.ocupante}
         return [t for t in self.mundo.tipos if t in libres]
@@ -192,4 +216,6 @@ class Sesion:
 
     def cerrar(self) -> None:
         self.cuerpo.cerrar()
+        if hasattr(self.percepcion, "cerrar"):
+            self.percepcion.cerrar()
         self.memoria.cerrar()

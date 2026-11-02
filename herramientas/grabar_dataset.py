@@ -14,6 +14,7 @@ Teclas:  q = terminar y guardar (con la ventana de la camara seleccionada)
 """
 import argparse
 import os
+import sys
 import time
 
 import cv2
@@ -46,7 +47,8 @@ def main():
     os.makedirs(dir_videos, exist_ok=True)
     os.makedirs(dir_fotos, exist_ok=True)
 
-    cap = cv2.VideoCapture(args.camara)
+    backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY   # DirectShow: abre rapido en Windows
+    cap = cv2.VideoCapture(args.camara, backend)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.ancho)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.alto)
     ok, frame = cap.read()

@@ -15,6 +15,13 @@ from app.imaginacion import dibujar_imaginacion, vista_real   # noqa: E402
 from app.sesion import Sesion                                 # noqa: E402
 from asistente.tipos import DESCONOCIDO, Accion               # noqa: E402
 
+# Version B: streamlit run app/pantalla.py -- --camara 0   (sin "--camara": mesa simulada)
+CAMARA = None
+if "--camara" in sys.argv:
+    _i = sys.argv.index("--camara")
+    CAMARA = sys.argv[_i + 1] if _i + 1 < len(sys.argv) else "0"
+    CAMARA = int(CAMARA) if CAMARA.isdigit() else CAMARA
+
 PREGUNTAS = {Accion.TRAER: "¿Te paso {}?", Accion.APARTAR: "¿Aparto {}?", Accion.ACERCARSE: "¿Me acerco?"}
 PASOS = ("Mirar la mesa", "Decidir qué hacer", "Responder")
 RESPUESTA = {True: "aprobado", False: "desaprobado", None: "sin respuesta"}
@@ -49,7 +56,8 @@ def _sesion() -> Sesion:
         if "sesion" in st.session_state:
             st.session_state.sesion.cerrar()
         en_disco = ruta != ":memory:"
-        st.session_state.sesion = Sesion.simulada(
+        crear = Sesion.simulada if CAMARA is None else (lambda *a, **k: Sesion.camara(*a, camara=CAMARA, **k))
+        st.session_state.sesion = crear(
             persona, ruta_db=str(RAIZ / ruta) if en_disco else ruta,
             carpeta_modelos=str(RAIZ / "modelos" / persona) if en_disco else None)
         st.session_state.clave = clave
@@ -168,8 +176,11 @@ def vista_pasos(actual: int):
 
 
 def vista_mesa(s: Sesion):
+    if s.con_camara and s.vista_camara is not None:
+        st.subheader("Lo que ve la cámara")
+        st.image(s.vista_camara, width="stretch")
     if s.mundo is not None:
-        st.subheader("La mesa")
+        st.subheader("La mesa virtual" if s.con_camara else "La mesa")
         st.image(vista_real(s.mundo, 640), width="stretch")
 
 
@@ -251,14 +262,17 @@ def barra_lateral(s: Sesion):
 
         objetos = s.escena.objetos if s.escena else []
         st.subheader("La mesa")
-        if s.mundo is not None:
+        if s.con_camara:
+            st.caption("Poné y quitá objetos con la mano en la cartulina; después tocá «Mirar la mesa».")
+        elif s.mundo is not None:
             disponibles = s.tipos_para_poner()
             st.selectbox("Objeto para poner", disponibles, key="poner_tipo",
                          help="Cada objeto existe una sola vez: si ya está en la mesa, no aparece aquí.")
             st.button("Poner en la mesa", on_click=poner, disabled=not disponibles)
-        st.selectbox("Objeto para quitar", [o.id for o in objetos], key="quitar_obj",
-                     format_func=lambda oid: next((_etiqueta(o) for o in objetos if o.id == oid), oid))
-        st.button("Quitar de la mesa", on_click=quitar, disabled=not objetos)
+        if not s.con_camara:
+            st.selectbox("Objeto para quitar", [o.id for o in objetos], key="quitar_obj",
+                         format_func=lambda oid: next((_etiqueta(o) for o in objetos if o.id == oid), oid))
+            st.button("Quitar de la mesa", on_click=quitar, disabled=not objetos)
 
         st.subheader("Enseñar un nombre")
         desconocidos = [o for o in objetos if o.nombre == DESCONOCIDO]
